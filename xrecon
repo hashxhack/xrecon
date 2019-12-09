@@ -1,0 +1,45 @@
+# REQUIREMENTS
+# requires nmap & vulscan nse script
+# for Ubuntu 18.04
+# apt install nmap git
+# git clone https://github.com/scipag/vulscan /usr/share/nmap/scripts/vulscan
+
+# INSTALL
+# git clone xrecon
+# chmod +x xrecon
+# ln -s xrecon /usr/bin/xrecon
+
+# Port scan
+nmap -sC -sV -A -T4 $1 -oN nmap.txt &> /dev/null
+
+# Vuln scan
+cat nmap.txt | grep -E "open|tcp" | cut -d "/" -f1 > f1.tmp
+while read port; do
+	echo "Port" $port":" >> f2.tmp
+	echo "	"$(nmap --script vulscan --script-args vulscandb=cve.csv -Pn -n -sV -p $port -T4 $1 | grep -oi 'CVE-....-....' | wc -l) >> f2.tmp
+done <f1.tmp
+
+# Check valid ip
+if [ -f "f2.tmp" ]; then
+        echo ""
+else
+        echo "Invalid IP"
+	echo "Usage: xrecon {IP}"
+	rm *.tmp nmap.txt
+        exit
+fi
+
+# Generate report
+echo $1 > report
+echo " " >> report
+echo "[Add a description of the machine]" >> report
+echo " " >> report
+echo "Ports:" >> report
+cat nmap.txt | grep -E "open|tcp" >> report
+echo " " >> report
+echo "Potential vulns:" >> report
+cat f2.tmp >> report
+cat report
+
+# Cleanup
+rm *.tmp
