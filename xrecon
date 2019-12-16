@@ -10,11 +10,13 @@ nports=$(cat open.tmp | grep -oP '\d{2,5}/open' | awk '{print $1}' FS="/" | wc -
 echo "  Open ports: $ports" | tee -a report
 echo " " | tee -a report
 
+# Scan each open port
 for (( c=1; c<=$nports; c++ ))
 do
         port=$(echo $ports | cut -d "," -f$c)
         echo "Port $port:" | tee -a report
         
+        # Web services
         curl -sL -w "%{http_code}\\n" "http://$1:$port" --max-time 2 -o /dev/null > /dev/null
         if [ $? -eq 0 ]; then
                 echo "  Web service detected: http://$1:$port" | tee -a dirList report
@@ -26,6 +28,7 @@ do
                 echo "  Detected" $(gobuster dir -q -u https://$1:$port -w /usr/share/dirb/wordlists/common.txt -x php,txt,xml | tee -a dirList report | wc -l) "files and directories"
         fi
         
+        # Vulnerabilities
         echo "  Potential vulns: "$(nmap --script vulscan --script-args vulscandb=cve.csv -Pn -n -sV -p $port -T4 $1 | grep -oi 'CVE-....-....' | wc -l) | tee -a report
 done
 
