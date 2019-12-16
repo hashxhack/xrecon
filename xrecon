@@ -1,45 +1,41 @@
-# REQUIREMENTS
-# requires nmap & vulscan nse script
-# for Ubuntu 18.04
-# apt install nmap git
-# git clone https://github.com/scipag/vulscan /usr/share/nmap/scripts/vulscan
+clear
+echo " " | tee report
+echo "Report for $1" | tee -a report
+echo " " | tee -a report
 
-# INSTALL
-# git clone https://github.com/hashxhack/xrecon.git
-# chmod +x xrecon
-# ln -s xrecon /usr/bin/xrecon
+# Open TCP ports
+nmap -p- --open -T5 -v -n $1 -oG open.tmp &> /dev/null
+ports=$(cat open.tmp | grep -oP '\d{2,5}/open' | awk '{print $1}' FS="/" | xargs | tr ' ' ',')
+nports=$(cat open.tmp | grep -oP '\d{2,5}/open' | awk '{print $1}' FS="/" | wc -l)
+echo "  Open ports: $ports" | tee -a report
+echo " " | tee -a report
 
-# Port scan
-nmap -sC -sV -A -T4 $1 -oN nmap.txt &> /dev/null
+for (( c=1; c<=$nports; c++ ))
+do
+        port=$(echo $ports | cut -d "," -f$c)
+        echo "Port $port:" | tee -a report
+        
+        curl -sL -w "%{http_code}\\n" "http://$1:$port" --max-time 2 -o /dev/null > /dev/null
+        if [ $? -eq 0 ]; then
+                echo "  Web service detected: http://$1:$port" | tee -a dirList report
+                echo "  Detected" $(gobuster dir -q -u http://$1:$port -w /usr/share/dirb/wordlists/common.txt -x php,txt,xml | tee -a dirList report | wc -l) "files and directories"
+        fi
+        curl -sL -w "%{http_code}\\n" "https://$1:$port" --max-time 2 -o /dev/null > /dev/null
+                if [ $? -eq 0 ]; then
+                echo "  Web service detected: https://$1:$port" | tee -a dirList report
+                echo "  Detected" $(gobuster dir -q -u https://$1:$port -w /usr/share/dirb/wordlists/common.txt -x php,txt,xml | tee -a dirList report | wc -l) "files and directories"
+        fi
+        
+        echo "  Potential vulns: "$(nmap --script vulscan --script-args vulscandb=cve.csv -Pn -n -sV -p $port -T4 $1 | grep -oi 'CVE-....-....' | wc -l) | tee -a report
+done
 
-# Vuln scan
-cat nmap.txt | grep -E "open|tcp" | cut -d "/" -f1 > f1.tmp
-while read port; do
-	echo "Port" $port":" >> f2.tmp
-	echo "	"$(nmap --script vulscan --script-args vulscandb=cve.csv -Pn -n -sV -p $port -T4 $1 | grep -oi 'CVE-....-....' | wc -l) >> f2.tmp
-done <f1.tmp
+# Version ports
+nmap -sC -sV -p$ports $1 > versionServ
 
-# Check valid ip
-if [ -f "f2.tmp" ]; then
-        echo ""
-else
-        echo "Invalid IP"
-	echo "Usage: xrecon {IP}"
-	rm *.tmp nmap.txt
-        exit
-fi
-
-# Generate report
-echo $1 > report
-echo " " >> report
-echo "[Add a description of the machine]" >> report
-echo " " >> report
-echo "Ports:" >> report
-cat nmap.txt | grep -E "open|tcp" >> report
-echo " " >> report
-echo "Potential vulns:" >> report
-cat f2.tmp >> report
+echo " " | tee -a report
+echo "(Web content saved in dirList)" | tee -a report
+echo "(Version scan saved in versionServ)" | tee -a report
+echo "(Report saved in report)" | tee -a report
+reset
 cat report
-
-# Cleanup
-rm *.tmp
+rm open.tmp
