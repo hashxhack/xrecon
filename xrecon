@@ -32,7 +32,7 @@ do
         echo "  Potential vulns: "$(nmap --script vulscan --script-args vulscandb=cve.csv -Pn -n -sV -p $port -T4 $1 | grep -oi 'CVE-....-....' | wc -l) | tee -a report
 done
 
-# Version ports
+# Services version
 nmap -sC -sV -p$ports $1 > versionServ
 
 echo " " | tee -a report
